@@ -1,0 +1,47 @@
+import threading
+import multiprocessing
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
+import scipy.signal
+from PIL import Image
+from PIL import ImageDraw 
+from PIL import ImageFont
+%matplotlib inline
+from helper import *
+
+from random import choice
+from time import sleep
+from time import time
+
+class confounded_env(object):
+    def __init__(self, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, max_steps = 100, obs_steps= 90, chain_prob = 0.5):
+        self.delay = delay
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.chain_prob = chain_prob
+        self.reset()
+        
+    def reset(self):
+        self.timestep = 0
+        #Choose the environment: chain or fork
+        self.is_chain = np.random.uniform() > self.chain_prob
+
+    def step(self,action):
+        self.timestep += 1
+
+        #Choose if node A 
+        
+        #Choose if node B is active
+        
+        #Depending on topology, choose if node C is active
+        
+        if self.timestep > self.max_steps:
+            done = True
+        else: done = False
+        return reward,done,self.timestep,state
+        
