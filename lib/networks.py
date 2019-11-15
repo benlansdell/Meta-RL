@@ -1,3 +1,8 @@
+import tensorflow as tf 
+import tensorflow.contrib.slim as slim
+import numpy as np
+from lib.helper import *
+
 class AC_Network_Confounding():
     def __init__(self,a_size,state_size,scope,trainer):
         with tf.variable_scope(scope):

@@ -1,25 +1,18 @@
+#!/usr/bin/env python
 import threading
 import multiprocessing
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
-import scipy.signal
-from PIL import Image
-from PIL import ImageDraw 
-from PIL import ImageFont
-from helper import *
+import argparse
 
-import tensorflow.contrib.slim as slim 
-
-from random import choice
-from time import sleep
-from time import time
-
-from numpy.random import rand
-
-from confounding_envs import *
+from lib.confounding_envs import *
 from lib.networks import AC_Network_Confounding as AC_Network
+from lib.helper import *
+
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment('main_confounding')
+ex.observers.append(MongoObserver())
 
 class Worker():
     def __init__(self,game,name,a_size,trainer,model_path,global_episodes):
@@ -83,8 +76,9 @@ class Worker():
             self.local_AC.apply_grads],
             feed_dict=feed_dict)
         return v_l / len(rollout),p_l / len(rollout),e_l / len(rollout), g_n,v_n
-        
-    def work(self,gamma,sess,coord,saver,train):
+    
+
+    def work(self,gamma,sess,coord,saver,train,epochs):
         episode_count = sess.run(self.global_episodes)
         print(episode_count)
         total_steps = 0
@@ -104,8 +98,6 @@ class Worker():
                 state = self.env.reset()
                 rnn_state = self.local_AC.state_init
                 
-                #print("Starting episode")
-
                 while d == False:
                     #Take an action using probabilities from policy network output.
                     a_dist,v,rnn_state_new = sess.run([self.local_AC.policy,self.local_AC.value,self.local_AC.state_out], 
@@ -153,6 +145,8 @@ class Worker():
                     #    make_gif(self.images,'./frames/image'+str(episode_count)+'.gif',
                     #        duration=len(self.images)*0.1,true_image=True)
 
+                    ex.log_scalar("training.mean_reward", mean_reward)
+                    
                     summary = tf.Summary()
                     summary.value.add(tag='Perf/Reward', simple_value=float(mean_reward))
                     summary.value.add(tag='Perf/Length', simple_value=float(mean_length))
@@ -169,41 +163,39 @@ class Worker():
                 if self.name == 'worker_0':
                     sess.run(self.increment)
                 episode_count += 1
+                if episode_count >= epochs:
+                    break
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--name', type=str, default="model_confounding")
-    parser.add_argument('--env', type=str, default = "obs")
-    parser.add_argument('--loadmodel', type=bool, default=False)
-    parser.add_argument('--train', type=bool, default=True)
-    parser.add_argument('--gamma', type=float, default=0.8)
-    parser.add_argument('--epochs', type=int, default=200)
-
-    args = parser.parse_args()
-
-    epochs = args.epochs
-    gamma = args.gamma # discount rate for advantage estimation and reward discounting
+@ex.config
+def config():
+    epochs = 200
+    gamma = 0.8 # discount rate for advantage estimation and reward discounting
     a_size = 2 # Agent can choose one of two topologies
-    load_model = args.loadmodel
-    train = args.train
-    model_path = './models/' + args.name + '_' + args.env
+    load_model = False
+    train = True
+    name = "main_confounding"
+    env = "obs_int"
 
-    if args.env == "obs":
+@ex.automain 
+def main(_run, epochs, gamma, a_size, load_model, train, name, env):
+
+    model_path = './models/' + name + '_' + env
+    
+    if env == "obs":
         #This environment has 3 variables. Here interventions are taking place, but no indicators are given. Thus the statistics
         #of the variables _may_ be enough to figure out the structure. 
-        env = ObsEnv
-    elif args.env == "confounded":
+        Env = ObsEnv
+    elif env == "confounded":
         #This is a completely ambiguous environment, there should not be enough information here to be able to solve the problem
-        env = ConfoundedEnv
-    elif args.env == "obs_int_env"
+        Env = ConfoundedEnv
+    elif env == "obs_int":
         #This environment has 5 variables. 3 for the states, and 2 that function as 'intervention' indicators
         #This should be the easiest environment to learn
-        env = ObsIntEnv
+        Env = ObsIntEnv
     else:
-        raise ValueError, "Not valid environment name"
+        raise ValueError("Not valid environment name")
     
-    e = env()
+    e = Env()
     state_size = e.N
     
     tf.reset_default_graph()
@@ -223,7 +215,7 @@ def main():
         workers = []
         # Create worker classes
         for i in range(num_workers):
-            workers.append(Worker(env(), i, a_size, trainer, model_path, global_episodes))
+            workers.append(Worker(Env(), i, a_size, trainer, model_path, global_episodes))
         saver = tf.train.Saver(max_to_keep=5)
     
     with tf.Session() as sess:
@@ -237,11 +229,11 @@ def main():
             
         worker_threads = []
         for worker in workers:
-            worker_work = lambda: worker.work(gamma,sess,coord,saver,train)
+            worker_work = lambda: worker.work(gamma,sess,coord,saver,train,epochs)
             thread = threading.Thread(target=(worker_work))
             thread.start()
             worker_threads.append(thread)
         coord.join(worker_threads)
     
-    if __name__ == "main":
-        main()
+#if __name__ == "__main__":
+#    main()

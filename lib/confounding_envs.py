@@ -1,6 +1,8 @@
+import numpy as np
+from numpy.random import rand
 
 class ConfoundedEnv(object):
-    def __init__(self, delay = 1, p1 = 0.2, p2 = 0.01, p3 = 0.01, max_steps = 20, obs_steps= 20, chain_prob = 0.5):
+    def __init__(self, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, max_steps = 20, obs_steps= 20, chain_prob = 0.5):
         self.delay = delay
         self.N = 3
         self.p1 = p1
@@ -49,9 +51,9 @@ class ConfoundedEnv(object):
             reward = 0.0
         return reward, done, self.timestep, state
 
-class ObsIntEnv(confounded_env):
-    def __init__(self, delay = 1, p1 = 0.2, p2 = 0.01, p3 = 0.01, int_p2 = 0.3, int_p3 = 0.3,\
-                                             max_steps = 20, obs_steps= 20, chain_prob = 0.5):
+class ObsIntEnv(ConfoundedEnv):
+    def __init__(self, delay = 1, p1 = 0.01, p2 = 0.01, p3 = 0.01, int_p2 = 0.2, int_p3 = 0.0,\
+                                             max_steps = 10, obs_steps= 10, chain_prob = 0.5):
         self.delay = delay
         self.N = 5
         self.p1 = p1
@@ -102,8 +104,8 @@ class ObsIntEnv(confounded_env):
             reward = 0.
         return reward, done, self.timestep, state
 
-class ObsEnv(confounded_env):
-    def __init__(self, delay = 1, p1 = 0.2, p2 = 0.01, p3 = 0.01, int_p2 = 0.3, int_p3 = 0.3,\
+class ObsEnv(ConfoundedEnv):
+    def __init__(self, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, int_p2 = 0.1, int_p3 = 0.1,\
                                              max_steps = 20, obs_steps= 20, chain_prob = 0.5):
         self.delay = delay
         self.N = 3

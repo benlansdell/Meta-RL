@@ -11,6 +11,7 @@ from PIL import Image
 from PIL import ImageDraw 
 from PIL import ImageFont
 
+import scipy.signal
 
 # Copies one set of variables to another.
 # Used to set worker network parameters to those of global network.
