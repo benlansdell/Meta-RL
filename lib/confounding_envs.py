@@ -104,6 +104,62 @@ class ObsIntEnv(ConfoundedEnv):
             reward = 0.
         return reward, done, self.timestep, state
 
+class IntEnv(ConfoundedEnv):
+    def __init__(self, delay = 1, p1 = 0.01, p2 = 0.01, p3 = 0.01, int_p2 = 0.2, int_p3 = 0.0,\
+                                             max_steps = 10, obs_steps= 9, chain_prob = 0.5):
+        self.delay = delay
+        self.N = 4
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.int_p2 = int_p2
+        self.int_p3 = int_p3
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.chain_prob = chain_prob
+        self.reset()
+        
+    def step(self,action):
+        #Choose spontaneous activity
+        y1 = rand() < self.p1
+        y2 = rand() < self.p2
+        y3 = rand() < self.p3
+
+        #Introduce interventions that help distinguish the two causal graphs
+        z2 = (action == 0)
+        z3 = (action == 1)
+
+        #Choose if node A is active
+        x1 = y1
+        #Choose if node B is active
+        x2 = y2 + (1-y2)*self.xhistory[max(0, self.timestep - self.delay), 0]
+        if z2:          #Overwrite if intervening
+            x2 = 1
+        #Depending on topology, choose if node C is active
+        if self.is_chain:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - self.delay), 1]
+        else:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 2*self.delay), 0]
+        if z3:          #Overwrite if intervening
+            x3 = 1
+
+        y1 = 1. if self.timestep >= self.obs_steps else 0.
+
+        state = np.array([x1, x2, x3, y1])
+        self.xhistory[self.timestep, :] = state
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+        #If in the 'answer phase', then the action is meant to indicate which topology is thinks is correct,
+        #otherwise the actions are just interventions on the variables, and no reward is given
+        if self.timestep >= self.max_steps:
+            reward = float((action == self.is_chain))
+        else:
+            reward = 0.
+        return reward, done, self.timestep, state
+
 class ObsEnv(ConfoundedEnv):
     def __init__(self, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, int_p2 = 0.1, int_p3 = 0.1,\
                                              max_steps = 20, obs_steps= 20, chain_prob = 0.5):

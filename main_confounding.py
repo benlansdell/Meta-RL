@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import threading
 import multiprocessing
 import numpy as np
@@ -192,6 +192,8 @@ def main(_run, epochs, gamma, a_size, load_model, train, name, env):
         #This environment has 5 variables. 3 for the states, and 2 that function as 'intervention' indicators
         #This should be the easiest environment to learn
         Env = ObsIntEnv
+    elif env == 'int':
+        Env = IntEnv
     else:
         raise ValueError("Not valid environment name")
     
