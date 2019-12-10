@@ -17,10 +17,292 @@ class gameOb():
         self.reward = reward
         self.name = name
 
-#To define:
-# VisualObsEnv
+#To implement:
 # VisualIntEnv
-# VisualObsIntEnv
+
+class VisualIntEnv():
+    def __init__(self, size, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, int_p2 = 0.1, int_p3 = 0.1, max_steps = 20, obs_steps= 19, chain_prob = 0.5):
+        self.sizeX = size
+        self.sizeY = size
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.int_p2 = int_p2
+        self.int_p3 = int_p3
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 2
+        self.N = 3 #Number of objects
+        self.bg = np.zeros([size,size])
+        self.chain_prob = chain_prob
+        self.reset()
+                
+    def reset(self):
+        #Choose the topology randomly with each reset
+        self.is_chain = rand() > self.chain_prob
+        self.timestep = 0
+        self.state = np.zeros(self.N+1)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.N+1))
+        return rendered_state, rendered_state_big
+
+    def renderEnv(self):
+        s = np.zeros([self.sizeY,self.sizeX])
+        #For each object... find a location and render its state
+        for idx in range(self.N):
+            obj_x = int((idx * self.sizeX)/float(self.N)) 
+            obj_y = obj_x
+            s[obj_y, obj_x] = self.state[idx]
+
+        #Plot response indicator
+        s_i = np.zeros([self.sizeY,self.sizeX])
+        obj_x = int(self.sizeX/float(self.N))
+        obj_y = 0
+        s_i[obj_y, obj_x] = self.state[-1]
+
+        a = gaussian_filter(s, sigma = 1, mode = 'wrap')
+        a = np.tile(a[:,:,None], (1,1,3))
+        #Add response indicator pixels to red channel
+        a[:,:,0] += s_i
+        a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        return a, a_big
+
+    def step(self,action):
+        #Choose spontaneous activity
+        y1 = rand() < self.p1
+        y2 = rand() < self.p2
+        y3 = rand() < self.p3
+
+        #Introduce interventions that help distinguish the two causal graphs
+        z2 = (action == 0)
+        z3 = (action == 1)
+
+        ##########
+        #Dynamics#
+        ##########
+
+        #Choose if node A is active
+        x1 = y1
+        #Choose if node B is active
+        x2 = y2 + (1-y2)*self.xhistory[max(0, self.timestep - 1), 0]
+        if z2:          #Overwrite if intervening
+            x2 = 1
+
+        #Depending on topology, choose if node C is active
+        if self.is_chain:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 1), 1]
+        else:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 2), 0]
+        if z3:          #Overwrite if intervening
+            x3 = 1
+
+        y1 = 1. if self.timestep >= self.obs_steps else 0.
+
+        state = np.array([x1, x2, x3, y1])
+
+        #Decay
+        self.state = np.minimum(1, (1-self.alpha)*self.state + self.alpha*state)
+        self.xhistory[self.timestep, :] = self.state
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+        #If in the 'action phase', then the action is meant to indicate which topology it thinks is correct
+        if self.timestep >= self.obs_steps:
+            reward = float(action == self.is_chain)
+        else:
+            reward = 0.0
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
+
+class VisualObsIntEnv():
+    def __init__(self, size, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, int_p2 = 0.1, int_p3 = 0.1, max_steps = 20, obs_steps= 20, chain_prob = 0.5):
+        self.sizeX = size
+        self.sizeY = size
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.int_p2 = int_p2
+        self.int_p3 = int_p3
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 2
+        self.N = 3 #Number of objects
+        self.bg = np.zeros([size,size])
+        self.chain_prob = chain_prob
+        a,a_big = self.reset()
+        plt.imshow(a_big,interpolation="nearest") 
+                
+    def reset(self):
+        #Choose the topology randomly with each reset
+        self.is_chain = rand() > self.chain_prob
+        self.timestep = 0
+        self.state = np.zeros(self.N+2)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.N+2))
+        return rendered_state, rendered_state_big
+
+    def renderEnv(self):
+        s = np.zeros([self.sizeY,self.sizeX])
+        #For each object... find a location and render its state
+        for idx in range(self.N):
+            obj_x = int((idx * self.sizeX)/float(self.N)) 
+            obj_y = obj_x
+            s[obj_y, obj_x] = self.state[idx]
+
+        #For the intervention objects... plot those too!
+        s_i = np.zeros([self.sizeY,self.sizeX])
+        for idx in range(2):
+            obj_x = int(((idx+1) * self.sizeX)/float(self.N))
+            obj_y = int((idx * self.sizeX)/float(self.N))
+            s_i[obj_y, obj_x] = self.state[self.N+idx]
+
+        a = gaussian_filter(s, sigma = 1, mode = 'wrap')
+        a = np.tile(a[:,:,None], (1,1,3))
+        #Add intervention indicator pixels to red channel
+        a[:,:,0] += s_i
+        a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        return a, a_big
+
+    def step(self,action):
+        #Choose spontaneous activity
+        y1 = rand() < self.p1
+        y2 = rand() < self.p2
+        y3 = rand() < self.p3
+
+        #Introduce interventions that help distinguish the two causal graphs
+        z2 = rand() < self.int_p2
+        z3 = rand() < self.int_p3
+
+        ##########
+        #Dynamics#
+        ##########
+
+        #Choose if node A is active
+        x1 = y1
+        #Choose if node B is active
+        x2 = y2 + (1-y2)*self.xhistory[max(0, self.timestep - 1), 0]
+        if z2:          #Overwrite if intervening
+            x2 = 1
+
+        #Depending on topology, choose if node C is active
+        if self.is_chain:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 1), 1]
+        else:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 2), 0]
+        if z3:          #Overwrite if intervening
+            x3 = 1
+
+        state = np.array([x1, x2, x3, z2, z3])
+
+        #Decay
+        self.state = np.minimum(1, (1-self.alpha)*self.state + self.alpha*state)
+        self.xhistory[self.timestep, :] = self.state
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+        #If in the 'action phase', then the action is meant to indicate which topology it thinks is correct
+        if self.timestep >= self.obs_steps:
+            reward = float(action == self.is_chain)
+        else:
+            reward = 0.0
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
+
+class VisualObsEnv():
+    def __init__(self, size, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, int_p2 = 0.1, int_p3 = 0.1, max_steps = 20, obs_steps= 20, chain_prob = 0.5):
+        self.sizeX = size
+        self.sizeY = size
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.int_p2 = int_p2
+        self.int_p3 = int_p3
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 2
+        self.N = 3 #Number of objects
+        self.bg = np.zeros([size,size])
+        self.chain_prob = chain_prob
+        a,a_big = self.reset()
+        plt.imshow(a_big,interpolation="nearest") 
+                
+    def reset(self):
+        #Choose the topology randomly with each reset
+        self.is_chain = rand() > self.chain_prob
+        self.timestep = 0
+        self.state = np.zeros(self.N)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.N))
+        return rendered_state, rendered_state_big
+
+    def renderEnv(self):
+        s = np.zeros([self.sizeY,self.sizeX])
+        #For each object... find a location and render its state
+        for idx in range(self.N):
+            obj_x = int((idx * self.sizeX)/float(self.N)) 
+            obj_y = obj_x
+            s[obj_y, obj_x] = self.state[idx]
+        a = gaussian_filter(s, sigma = 1, mode = 'wrap')
+        a = np.tile(a[:,:,None], (1,1,3))
+        a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        return a, a_big
+
+    def step(self,action):
+        #Choose spontaneous activity
+        y1 = rand() < self.p1
+        y2 = rand() < self.p2
+        y3 = rand() < self.p3
+
+        #Introduce interventions that help distinguish the two causal graphs
+        z2 = rand() < self.int_p2
+        z3 = rand() < self.int_p3
+
+        ##########
+        #Dynamics#
+        ##########
+
+        #Choose if node A is active
+        x1 = y1
+        #Choose if node B is active
+        x2 = y2 + (1-y2)*self.xhistory[max(0, self.timestep - 1), 0]
+        if z2:          #Overwrite if intervening
+            x2 = 1
+
+        #Depending on topology, choose if node C is active
+        if self.is_chain:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 1), 1]
+        else:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 2), 0]
+        if z3:          #Overwrite if intervening
+            x3 = 1
+
+        state = np.array([x1, x2, x3])
+
+        #Decay
+        self.state = np.minimum(1, (1-self.alpha)*self.state + self.alpha*state)
+        self.xhistory[self.timestep, :] = self.state
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+        #If in the 'action phase', then the action is meant to indicate which topology it thinks is correct
+        if self.timestep >= self.obs_steps:
+            reward = float(action == self.is_chain)
+        else:
+            reward = 0.0
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
 
 #Here not enough information is provided to solve the problem
 #Three objects. 

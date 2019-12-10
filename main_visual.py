@@ -218,7 +218,7 @@ class Worker():
                         saver.save(sess,self.model_path+'/model-'+str(episode_count)+'.cptk')
                         print("Saved Model")
 
-                    if self.name == 'worker_0' and episode_count % 50 == 0:
+                    if self.name == 'worker_0' and episode_count % 250 == 0:
                         time_per_step = 0.25
                         self.images = np.array(episode_frames)
                         make_gif(self.images,'./frames/image'+str(episode_count)+'.gif',
@@ -257,7 +257,7 @@ def config():
     train = True
     model_path = './model_meta_visual'
     name = "main_visual"
-    env = "confounded"
+    env = "int"
     env_dim = 8
     dev = True
     hyperparam = False
