@@ -175,6 +175,9 @@ def config():
     train = True
     name = "main_confounding"
     env = "obs_int"
+    dev = True #Whether this code is still in development, or this is a 'production' run for making final results for analysis
+               #Defaults to true
+    hyperparam = False #Whether we are doing a hyperparam search
 
 @ex.automain 
 def main(_run, epochs, gamma, a_size, load_model, train, name, env):

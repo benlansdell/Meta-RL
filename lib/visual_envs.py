@@ -4,7 +4,9 @@ import itertools
 import scipy.ndimage
 import scipy.misc
 import matplotlib.pyplot as plt
+from numpy.random import rand
 
+from scipy.ndimage import gaussian_filter
 
 class gameOb():
     def __init__(self,coordinates,size,color,reward,name):
@@ -14,7 +16,90 @@ class gameOb():
         self.color = color
         self.reward = reward
         self.name = name
-        
+
+#To define:
+# VisualObsEnv
+# VisualIntEnv
+# VisualObsIntEnv
+
+#Here not enough information is provided to solve the problem
+#Three objects. 
+class VisualConfoundedEnv():
+    def __init__(self, size, delay = 1, p1 = 0.1, p2 = 0.01, p3 = 0.01, max_steps = 20, obs_steps= 20, chain_prob = 0.5):
+        self.sizeX = size
+        self.sizeY = size
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 2
+        self.N = 3 #Number of objects
+        self.bg = np.zeros([size,size])
+        self.chain_prob = chain_prob
+        a,a_big = self.reset()
+        plt.imshow(a_big,interpolation="nearest") 
+                
+    def reset(self):
+        #Choose the topology randomly with each reset
+        self.is_chain = rand() > self.chain_prob
+        self.timestep = 0
+        self.state = np.zeros(self.N)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.N))
+        return rendered_state, rendered_state_big
+
+    def renderEnv(self):
+        s = np.zeros([self.sizeY,self.sizeX])
+        #For each object... find a location and render its state
+        for idx in range(self.N):
+            obj_x = int((idx * self.sizeX)/float(self.N)) 
+            obj_y = obj_x
+            s[obj_y, obj_x] = self.state[idx]
+        a = gaussian_filter(s, sigma = 1, mode = 'wrap')
+        a = np.tile(a[:,:,None], (1,1,3))
+        a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        return a, a_big
+
+    def step(self,action):
+        #Choose spontaneous activity
+        y1 = rand() < self.p1
+        y2 = rand() < self.p2
+        y3 = rand() < self.p3
+
+        ##########
+        #Dynamics#
+        ##########
+
+        #Choose if node A is active
+        x1 = y1
+        #Choose if node B is active
+        x2 = y2 + (1-y2)*self.xhistory[max(0, self.timestep - 1), 0]
+        #Depending on topology, choose if node C is active
+        if self.is_chain:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 1), 1]
+        else:
+            x3 = y3 + (1-y3)*self.xhistory[max(0, self.timestep - 2), 0]
+        state = np.array([x1, x2, x3])
+
+        #Decay
+        self.state = np.minimum(1, (1-self.alpha)*self.state + self.alpha*state)
+        self.xhistory[self.timestep, :] = self.state
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+        #If in the 'action phase', then the action is meant to indicate which topology it thinks is correct
+        if self.timestep >= self.obs_steps:
+            reward = float(action == self.is_chain)
+        else:
+            reward = 0.0
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
+
 class gameEnv():
     def __init__(self,partial,size,goal_color):
         self.sizeX = size
@@ -25,7 +110,6 @@ class gameEnv():
         self.bg = np.zeros([size,size])
         a,a_big = self.reset(goal_color)
         plt.imshow(a_big,interpolation="nearest")
-        
         
     def getFeatures(self):
         return np.array([self.objects[0].x,self.objects[0].y]) / float(self.sizeX)

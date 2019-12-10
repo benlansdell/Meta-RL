@@ -89,6 +89,19 @@ def set_image_context(correct, observation,values,selection,trial):
     bandit_image[291:297,10+(selection*95):10+(selection*95)+80,:] = [80.0,80.0,225.0]
     return bandit_image
 
+def set_image_visual(frame,reward,step):
+    color = [1., 0.5, 0.]
+    a = scipy.misc.imresize(frame,[200,200],interp='nearest')
+    b = np.ones([400,200,3]) * 255.0
+    b[0:200,0:200,:] = a 
+    b[200:210,0:200,:] = np.array(color) * 255.0
+    b = Image.fromarray(b.astype('uint8'))
+    draw = ImageDraw.Draw(b)
+    font = ImageFont.truetype("./resources/FreeSans.ttf", 24)
+    draw.text((40, 280),'Step: ' + str(step),(0,0,0),font=font)
+    draw.text((40, 330),'Reward: ' + str(reward),(0,0,0),font=font)
+    c = np.array(b)
+    return c
 
 def set_image_gridworld(frame,color,reward,step):
     a = scipy.misc.imresize(frame,[200,200],interp='nearest')
