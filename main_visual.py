@@ -157,7 +157,7 @@ class Worker():
             feed_dict=feed_dict)
         return v_l / len(rollout),p_l / len(rollout),e_l / len(rollout), g_n,v_n
         
-    def work(self,gamma,sess,coord,saver,train):
+    def work(self,gamma,sess,coord,saver,train,epochs):
         episode_count = sess.run(self.global_episodes)
         total_steps = 0
         print("Starting worker " + str(self.number))
@@ -247,6 +247,9 @@ class Worker():
                 if self.name == 'worker_0':
                     sess.run(self.increment)
                 episode_count += 1
+                if episode_count >= epochs:
+                    break
+
 
 @ex.config
 def config():
@@ -330,7 +333,7 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env):
         
     worker_threads = []
     for worker in workers:
-        worker_work = lambda: worker.work(gamma,sess,coord,saver,train)
+        worker_work = lambda: worker.work(gamma,sess,coord,saver,train,epochs)
         thread = threading.Thread(target=(worker_work))
         thread.start()
         worker_threads.append(thread)
