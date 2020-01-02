@@ -19,15 +19,16 @@ import os
 from random import choice
 from time import sleep
 from time import time
-from lib.visual_envs import *
+from lib.ego_envs import *
 
 from sacred import Experiment
 from sacred.observers import MongoObserver
-ex = Experiment('main_visual')
+ex = Experiment('main_ego')
 ex.observers.append(MongoObserver())
 
 NUM_PARALLEL_EXEC_UNITS = 1
 MAX_WORKERS = 1
+
 ###
 class AC_Network():
     def __init__(self,a_size,s_size,scope,trainer):
@@ -98,7 +99,7 @@ class AC_Network():
 
 
 class Worker():
-    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes):
+    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate):
         self.name = "worker_" + str(name)
         self.number = name        
         self.model_path = model_path
@@ -109,6 +110,7 @@ class Worker():
         self.episode_lengths = []
         self.episode_mean_values = []
         self.summary_writer = tf.summary.FileWriter("train_"+str(self.number))
+        self.save_rate = save_rate
 
         #Create the local copy of the network and the tensorflow op to copy global paramters to local network
         self.local_AC = AC_Network(a_size,s_size,self.name,trainer)
@@ -195,7 +197,7 @@ class Worker():
                     episode_buffer.append([s,a,r,t,d,v[0,0]])
                     episode_values.append(v[0,0])
                     episode_reward += r
-                    episode_frames.append(set_image_visual(s1_big,episode_reward,t))
+                    episode_frames.append(set_image_ego(s1_big,episode_reward,t))
                     total_steps += 1
                     t += 1
                     episode_step_count += 1
@@ -213,17 +215,17 @@ class Worker():
                     v_l,p_l,e_l,g_n,v_n = self.train(episode_buffer,sess,gamma,0.0)
                     
                 # Periodically save gifs of episodes, model parameters, and summary statistics.
-                if episode_count % 100 == 0 and episode_count != 0:
+                if episode_count % self.save_rate == 0 and episode_count != 0:
                     if episode_count % 500 == 0 and self.name == 'worker_0' and train == True:
                         saver.save(sess,self.model_path+'/model-'+str(episode_count)+'.cptk')
                         print("Saved Model")
 
-                    if self.name == 'worker_0' and episode_count % 500 == 0:
+                    if self.name == 'worker_0' and episode_count % 1000 == 0:
                         time_per_step = 0.25
                         self.images = np.array(episode_frames)
                         make_gif(self.images,'./frames/image'+str(episode_count)+'.gif',
                             duration=len(self.images)*time_per_step,true_image=True)
-    
+                        
                     mean_reward = np.mean(self.episode_rewards[-50:])
                     mean_length = np.mean(self.episode_lengths[-50:])
                     mean_value = np.mean(self.episode_mean_values[-50:])
@@ -256,34 +258,35 @@ class Worker():
 
 @ex.config
 def config():
-    epochs = 1000
+    epochs = 1e6
     gamma = .95 # discount rate for advantage estimation and reward discounting
-    a_size = 4 
+    a_size = 5 
     load_model = False
     train = True
-    model_path = './model_meta_visual'
-    name = "main_visual"
-    env = "int"
-    env_dim = 8
+    model_path = './model_meta_ego'
+    name = "main_ego"
+    env = "steplights"
+    env_dim = 5
     dev = True
     hyperparam = False
+    save_rate = 1e4
 
 @ex.automain 
-def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env):
+def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate):
 
     model_path = './models/' + name + '_' + env
     
     if env == "game":
         #Default environment. The one originally implemented.
         Env = gameEnv
-    elif env == "confounded":
-        Env = VisualConfoundedEnv
-    elif env == "obs":
-        Env = VisualObsEnv
-    elif env == "obsint":
-        Env = VisualObsIntEnv
-    elif env == "int":
-        Env = VisualIntEnv
+    elif env == "steplights":
+        Env = StepOnLightsEnv
+    elif env == "pushbutton":
+        raise NotImplementedError
+    elif env == "pushbox":
+        raise NotImplementedError
+    elif env == "anna":
+        raise NotImplementedError
     else:
         raise ValueError("Not valid environment name")
        
@@ -312,7 +315,7 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env):
         workers = []
         # Create worker classes
         for i in range(num_workers):
-            workers.append(Worker(Env(size = env_dim),i,a_size,env_dim,trainer,model_path,global_episodes))
+            workers.append(Worker(Env(size = env_dim),i,a_size,env_dim,trainer,model_path,global_episodes,save_rate))
         saver = tf.train.Saver(max_to_keep=5)
 
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, 
