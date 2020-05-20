@@ -20,7 +20,6 @@ class gameOb():
 #To implement:
 # PushButtonsEnv (Room and ball)
 # PushBoxesEnv (Sokoban)
-# AnnasExpts
 
 class StepOnLightsEnv():
     """Agent can move around, and step on one of the lights to block it ('intervening' on it). 
