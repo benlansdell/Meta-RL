@@ -1,4 +1,7 @@
 *.pyc
 .ipynb_checkpoints/
 frames/
-
+train_*/
+sacred_board/
+.DS_Store
+.*py
