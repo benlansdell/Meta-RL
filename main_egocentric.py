@@ -26,8 +26,8 @@ from sacred.observers import MongoObserver
 ex = Experiment('main_ego')
 ex.observers.append(MongoObserver())
 
-NUM_PARALLEL_EXEC_UNITS = 1
-MAX_WORKERS = 1
+NUM_PARALLEL_EXEC_UNITS = 4
+MAX_WORKERS = 4
 
 ###
 class AC_Network():
@@ -281,22 +281,17 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
         Env = gameEnv
     elif env == "steplights":
         Env = StepOnLightsEnv
-    elif env == "pushbutton":
-        raise NotImplementedError
+    elif env == "pushbuttons":
+        Env = PushButtonsEnv
+    elif env == "pushbuttons_cardinal":
+        Env = PushButtonsCardinalEnv
     elif env == "pushbox":
         raise NotImplementedError
     elif env == "anna":
         raise NotImplementedError
     else:
         raise ValueError("Not valid environment name")
-       
-    ###############
-    #From workbook#
-    ###############
-
-    #Need to
-    #Tell it to stop after a set number of epochs
-    
+           
     tf.reset_default_graph()
 
     if not os.path.exists(model_path):
@@ -310,12 +305,12 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
 
         global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
         trainer = tf.train.AdamOptimizer(learning_rate=1e-3)
-        master_network = AC_Network(a_size,env_dim,'global',None) # Generate global network
+        master_network = AC_Network(a_size,env_dim+2,'global',None) # Generate global network
         num_workers = min(MAX_WORKERS, multiprocessing.cpu_count()) # Set workers ot number of available CPU threads
         workers = []
         # Create worker classes
         for i in range(num_workers):
-            workers.append(Worker(Env(size = env_dim),i,a_size,env_dim,trainer,model_path,global_episodes,save_rate))
+            workers.append(Worker(Env(size = env_dim),i,a_size,env_dim+2,trainer,model_path,global_episodes,save_rate))
         saver = tf.train.Saver(max_to_keep=5)
 
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, 

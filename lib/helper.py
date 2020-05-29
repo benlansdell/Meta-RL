@@ -11,6 +11,8 @@ from PIL import Image
 from PIL import ImageDraw 
 from PIL import ImageFont
 
+import skimage.transform
+
 import scipy.signal
 
 # Copies one set of variables to another.
@@ -74,9 +76,14 @@ def set_image_context(correct, observation,values,selection,trial):
     obs_a = obs[:,0:1,:]
     obs_b = obs[:,1:2,:]
     cor = correct * 225.0
-    obs_a = scipy.misc.imresize(obs_a,[100,100],interp='nearest')
-    obs_b = scipy.misc.imresize(obs_b,[100,100],interp='nearest')
-    cor = scipy.misc.imresize(cor,[100,100],interp='nearest')
+    #obs_a = scipy.misc.imresize(obs_a,[100,100],interp='nearest')
+    #obs_b = scipy.misc.imresize(obs_b,[100,100],interp='nearest')
+    #cor = scipy.misc.imresize(cor,[100,100],interp='nearest')
+
+    obs_a = skimage.transform.resize(obs_a,[100,100])
+    obs_b = skimage.transform.resize(obs_b,[100,100])
+    cor = skimage.transform.resize(cor,[100,100])
+
     bandit_image = Image.open('./resources/c_bandit.png')
     draw = ImageDraw.Draw(bandit_image)
     font = ImageFont.truetype("./resources/FreeSans.ttf", 24)
@@ -91,7 +98,7 @@ def set_image_context(correct, observation,values,selection,trial):
 
 def set_image_visual(frame,reward,step):
     color = [1., 0.5, 0.]
-    a = scipy.misc.imresize(frame,[200,200],interp='nearest')
+    a = skimage.transform.resize(frame,[200,200])
     b = np.ones([400,200,3]) * 255.0
     b[0:200,0:200,:] = a 
     b[200:210,0:200,:] = np.array(color) * 255.0
@@ -104,7 +111,7 @@ def set_image_visual(frame,reward,step):
     return c
 
 def set_image_ego(frame,reward,step):
-    a = scipy.misc.imresize(frame,[200,200],interp='nearest')
+    a = skimage.transform.resize(frame,[200,200])
     b = np.ones([400,200,3]) * 255.0
     b[0:200,0:200,:] = a 
     b[200:210,0:200,:] = np.array(color) * 255.0
@@ -119,7 +126,7 @@ def set_image_ego(frame,reward,step):
 set_image_ego = set_image_visual
 
 def set_image_gridworld(frame,color,reward,step):
-    a = scipy.misc.imresize(frame,[200,200],interp='nearest')
+    a = skimage.transform.resize(frame,[200,200])
     b = np.ones([400,200,3]) * 255.0
     b[0:200,0:200,:] = a 
     b[200:210,0:200,:] = np.array(color) * 255.0

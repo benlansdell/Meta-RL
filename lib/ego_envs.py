@@ -8,6 +8,9 @@ from numpy.random import rand
 
 from scipy.ndimage import gaussian_filter
 
+from PIL import Image
+import skimage.transform
+
 class gameOb():
     def __init__(self,coordinates,size,color,reward,name):
         self.x = coordinates[0]
@@ -17,10 +20,10 @@ class gameOb():
         self.reward = reward
         self.name = name
 
-#To implement:
+#Still to implement:
 # PushButtonsEnv (Room and ball)
 # PushBoxesEnv (Sokoban)
-# AnnasExpts
+# AnnasExpts (Something?)
 
 class StepOnLightsEnv():
     """Agent can move around, and step on one of the lights to block it ('intervening' on it). 
@@ -169,6 +172,291 @@ class StepOnLightsEnv():
                     reward = 1.
         else:
             reward = 0.0
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
+
+class PushButtonsEnv():
+    """Agent can observe a ball bouncing around. The ball has some slight randomness in the angle it bounces off the walls.
+    The ball can interact with buttons that open a door. When the go cue is given, the agent must figure out which button is
+    the one that opens the door and quickly move to it before get the reward in time. 
+
+    This is quite challenging to just randomly solve...
+
+    Reward is given when, after receiving a go cue, it reaches the exit square
+    """
+    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30):
+        self.sizeX = size
+        self.sizeY = size
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 4
+        self.n_buttons = 3
+        self.open_count = 5 #Number of time steps the door is open after button pushed
+        self.bg = np.zeros([size,size])
+
+        self.b1_pos = (0,2)
+        self.b2_pos = (2,0)
+        self.b3_pos = (4,2)
+        self.door_pos = (2,4)
+
+        self.render_button_pos = np.zeros((self.n_buttons, 2), dtype = int)
+        self.render_button_pos[0,:] = [0,3]
+        self.render_button_pos[1,:] = [3,0]
+        self.render_button_pos[2,:] = [6,3]
+
+        self.render_door_pos = (3,6)
+
+        self.button_positions = [self.b1_pos, self.b2_pos, self.b3_pos]
+
+        self.reset()
+                
+    def reset(self):
+        #Choose the topology randomly with each reset
+        self.exit_button = self.chooseNewTarget()
+        self.timestep = 0
+        #Choose the ball's position and target randomly
+        self.door_open = 0
+        self.button_on = [0,0,0]
+        self.ball_pos = np.random.randint(self.sizeX, size = 2)
+        self.ball_target = self.chooseNewTarget()
+        self.agent_pos = np.random.randint(self.sizeX, size = 2)
+        self.state = np.zeros(self.n_buttons+1)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.n_buttons+1))
+        return rendered_state, rendered_state_big
+
+    def chooseNewTarget(self):
+        return np.random.randint(self.n_buttons)
+
+    def vel(self, x):
+        if x < 0:
+            return -1
+        elif x > 0:
+            return 1
+        else:
+            return 0
+
+    def renderEnv(self, brightness = 0.2):
+        s = np.zeros([self.sizeY+2,self.sizeX+2])
+        #Buttons
+        for idx in range(self.n_buttons):
+            s[(int(self.render_button_pos[idx,0]),int(self.render_button_pos[idx,1]))] = 0.5
+        #Door
+        s[self.render_door_pos] = 0.5
+
+        #If in obs mode:
+        if self.timestep <= self.obs_steps:
+            #Ball position
+            s[1+self.ball_pos[0], 1+self.ball_pos[1]] = 1
+        #If in action mode:
+        else:
+            #Agent position, and light indicating if exit is open or not
+            s[1+self.agent_pos[0], 1+self.agent_pos[1]] = brightness
+
+        a = np.tile(s[:,:,None], (1,1,3))
+        #Draw indicators on different channels
+        if self.door_open:
+            a[self.render_door_pos[0],self.render_door_pos[1],0] = 1
+        for idx in range(self.n_buttons):
+            if self.button_on[idx]:
+                a[self.render_button_pos[idx,0],self.render_button_pos[idx,1],2] = 1
+
+        if self.timestep > self.obs_steps:
+            a[0,0,1] = 1
+
+        #a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        #a_big = Image.fromarray(a).resize(size = [32, 32])
+        a_big = skimage.transform.resize(a, [32, 32, 3])
+        return a, a_big
+
+    def step(self,action):
+        #The environment dynamics are all here...
+        reward = 0.0
+
+        #Reset the buttons and coutndown door timer
+        for idx in range(self.n_buttons):
+            if self.button_on[idx]:
+                self.button_on[idx] = 0
+        if self.door_open > 0:
+            self.door_open -= 1
+
+        #If in obs mode... the ball moves around
+        #######
+        if self.timestep <= self.obs_steps:
+            #Move it towards target
+            #Calculate difference vector
+            dy = self.vel(self.ball_pos[0] - self.button_positions[self.ball_target][0])
+            dx = self.vel(self.ball_pos[1] - self.button_positions[self.ball_target][1])
+            self.ball_pos[0] -= dy
+            self.ball_pos[1] -= dx
+
+            #If ball is at a target, choose a new target randomly
+            for idx, pos in enumerate(self.button_positions):
+                if self.ball_pos[0] == pos[0] and self.ball_pos[1] == pos[1]:
+                    self.button_on[idx] = 1
+
+                    if self.exit_button == idx:
+                        self.door_open = self.open_count
+                        #To make things a bit easier for this environment, these transitions are also rewarded...
+                        reward = 1.0
+                    self.ball_target = self.chooseNewTarget()
+
+        #If in action mode... the agent can move around
+        #######
+        else:
+            if action == 0:
+                #Move up
+                self.agent_pos[0] = max(0, self.agent_pos[0]-1)
+            elif action == 1:
+                #Move down
+                self.agent_pos[0] = min(self.sizeX-1, self.agent_pos[0]+1)
+            elif action == 2:
+                #Move left
+                self.agent_pos[1] = max(0, self.agent_pos[1]-1)
+            elif action == 3:
+                #Move right
+                self.agent_pos[1] = min(self.sizeX-1, self.agent_pos[1]+1)
+
+            #If agent is on a button then set indicator to 1
+            #If button is a target, then open door and set timer
+            for idx, pos in enumerate(self.button_positions):
+                if self.agent_pos[0] == pos[0] and self.agent_pos[1] == pos[1]:
+                    self.button_on[idx] = 1
+                    if self.exit_button == idx:
+                        self.door_open = self.open_count
+
+            #If agent is at open door, then give reward
+            if self.agent_pos[0] == self.door_pos[0] and self.agent_pos[1] == self.door_pos[1]:
+                if self.door_open:
+                    reward = 10.0
+
+        #Update environment state...
+        state = np.hstack((self.button_on, self.door_open))
+        if self.timestep < self.max_steps:
+            self.xhistory[self.timestep,:] = state
+
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+
+        #Render states to agent to see....
+        rendered_state, rendered_state_big = self.renderEnv()
+        return rendered_state, rendered_state_big, reward, done
+
+class PushButtonsCardinalEnv(PushButtonsEnv):
+    """Agent can observe a ball bouncing around. The ball has some slight randomness in the angle it bounces off the walls.
+    The ball can interact with buttons that open a door. When the go cue is given, the agent must figure out which button is
+    the one that opens the door and quickly move to it before get the reward in time. 
+
+    This is quite challenging to just randomly solve...
+
+    Reward is given when, after receiving a go cue, it reaches the exit square.
+
+    In this environment, the ball can only move in 4 cardinal directions, while the agent can move
+    in all 8 directions (like a king in chess). This tests to see if the agent is copying the white
+    box (which only moves cardinally), or takes advantage of its extended action space.
+    """
+
+    def __init__(self, size = 5, delay = 1, obs_steps = 30, max_steps = 40):
+        super(PushButtonsCardinalEnv, self).__init__(size, delay, obs_steps, max_steps)
+        self.actions = 8
+
+    def step(self,action):
+        #The environment dynamics are all here...
+        reward = 0.0
+
+        #Reset the buttons and coutndown door timer
+        for idx in range(self.n_buttons):
+            if self.button_on[idx]:
+                self.button_on[idx] = 0
+        if self.door_open > 0:
+            self.door_open -= 1
+
+        #If in obs mode... the ball moves around
+        #######
+        if self.timestep <= self.obs_steps:
+            #Move it towards target
+            #Calculate difference vector
+
+            #Only move one of dx and dy...
+            diff_y = self.ball_pos[0] - self.button_positions[self.ball_target][0]
+            diff_x = self.ball_pos[1] - self.button_positions[self.ball_target][1]
+            dy = self.vel(diff_y)
+            dx = self.vel(diff_x)
+            move_x = abs(diff_x) > abs(diff_y)
+            if move_x: self.ball_pos[1] -= dx
+            else: self.ball_pos[0] -= dy
+
+            #If ball is at a target, choose a new target randomly
+            for idx, pos in enumerate(self.button_positions):
+                if self.ball_pos[0] == pos[0] and self.ball_pos[1] == pos[1]:
+                    self.button_on[idx] = 1
+
+                    if self.exit_button == idx:
+                        self.door_open = self.open_count
+                        #To make things a bit easier for this environment, these transitions are also rewarded...
+                        reward = 1.0
+                    self.ball_target = self.chooseNewTarget()
+
+        #If in action mode... the agent can move around
+        #######
+        else:
+            if action == 0:
+                #Move up
+                self.agent_pos[0] = max(0, self.agent_pos[0]-1)
+            elif action == 1:
+                #Move down
+                self.agent_pos[0] = min(self.sizeX-1, self.agent_pos[0]+1)
+            elif action == 2:
+                #Move left
+                self.agent_pos[1] = max(0, self.agent_pos[1]-1)
+            elif action == 3:
+                #Move right
+                self.agent_pos[1] = min(self.sizeX-1, self.agent_pos[1]+1)
+            elif action == 4:
+                #Move up-left
+                self.agent_pos[0] = max(0, self.agent_pos[0]-1)
+                self.agent_pos[1] = max(0, self.agent_pos[1]-1)
+            elif action == 5:
+                #Move down-left
+                self.agent_pos[0] = min(self.sizeX-1, self.agent_pos[0]+1)
+                self.agent_pos[1] = max(0, self.agent_pos[1]-1)
+            elif action == 6:
+                #Move up-right
+                self.agent_pos[0] = max(0, self.agent_pos[0]-1)
+                self.agent_pos[1] = min(self.sizeX-1, self.agent_pos[1]+1)
+            elif action == 7:
+                #Move down-right
+                self.agent_pos[0] = min(self.sizeX-1, self.agent_pos[0]+1)
+                self.agent_pos[1] = min(self.sizeX-1, self.agent_pos[1]+1)
+            #If agent is on a button then set indicator to 1
+            #If button is a target, then open door and set timer
+            for idx, pos in enumerate(self.button_positions):
+                if self.agent_pos[0] == pos[0] and self.agent_pos[1] == pos[1]:
+                    self.button_on[idx] = 1
+                    if self.exit_button == idx:
+                        self.door_open = self.open_count
+
+            #If agent is at open door, then give reward
+            if self.agent_pos[0] == self.door_pos[0] and self.agent_pos[1] == self.door_pos[1]:
+                if self.door_open:
+                    reward = 10.0
+
+        #Update environment state...
+        state = np.hstack((self.button_on, self.door_open))
+        if self.timestep < self.max_steps:
+            self.xhistory[self.timestep,:] = state
+
+        self.timestep += 1
+        if self.timestep >= self.max_steps:
+            done = True
+        else:
+            done = False
+
         #Render states to agent to see....
         rendered_state, rendered_state_big = self.renderEnv()
         return rendered_state, rendered_state_big, reward, done
