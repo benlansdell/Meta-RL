@@ -5,3 +5,5 @@ train_*/
 sacred_board/
 .DS_Store
 .*py
+lib/model_meta/
+models/
