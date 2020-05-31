@@ -98,7 +98,7 @@ def set_image_context(correct, observation,values,selection,trial):
 
 def set_image_visual(frame,reward,step):
     color = [1., 0.5, 0.]
-    a = skimage.transform.resize(frame,[200,200])
+    a = skimage.transform.resize(frame,[200,200], order = 1)
     b = np.ones([400,200,3]) * 255.0
     b[0:200,0:200,:] = a 
     b[200:210,0:200,:] = np.array(color) * 255.0
@@ -111,6 +111,7 @@ def set_image_visual(frame,reward,step):
     return c
 
 def set_image_ego(frame,reward,step):
+    color = [1., 0.5, 0.]
     a = skimage.transform.resize(frame,[200,200])
     b = np.ones([400,200,3]) * 255.0
     b[0:200,0:200,:] = a 

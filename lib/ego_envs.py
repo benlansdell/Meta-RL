@@ -83,7 +83,8 @@ class StepOnLightsEnv():
         #Add response indicator pixels to red channel
         a[:,:,0] += s_i
         a[:,:,1] += a_i
-        a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        #a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
+        a_big = skimage.transform.resize(a, [32, 32, 3], order = 0)*255.0
         return a, a_big
 
     def step(self,action):
@@ -185,15 +186,25 @@ class PushButtonsEnv():
 
     Reward is given when, after receiving a go cue, it reaches the exit square
     """
-    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30):
-        self.sizeX = size
-        self.sizeY = size
+    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30, randomize_size = False, max_size = 8):
         self.alpha = 0.5
         self.max_steps = max_steps
         self.obs_steps = obs_steps
         self.actions = 4
         self.n_buttons = 3
         self.open_count = 5 #Number of time steps the door is open after button pushed
+        self.randomize_size = randomize_size
+        self.size = size
+        self.max_size = max_size
+        self._make_geometry()
+        self.reset()
+
+    def _make_geometry(self):
+
+        if self.randomize_size: size = np.random.randint(self.size, self.max_size+1)
+        else: size = self.size
+        self.sizeX = size
+        self.sizeY = size
         self.bg = np.zeros([size,size])
 
         self.b1_pos = (0,2)
@@ -202,17 +213,17 @@ class PushButtonsEnv():
         self.door_pos = (2,4)
 
         self.render_button_pos = np.zeros((self.n_buttons, 2), dtype = int)
+
         self.render_button_pos[0,:] = [0,3]
         self.render_button_pos[1,:] = [3,0]
         self.render_button_pos[2,:] = [6,3]
-
         self.render_door_pos = (3,6)
 
         self.button_positions = [self.b1_pos, self.b2_pos, self.b3_pos]
 
-        self.reset()
-                
-    def reset(self):
+    def reset(self):            
+
+        self._make_geometry()
         #Choose the topology randomly with each reset
         self.exit_button = self.chooseNewTarget()
         self.timestep = 0
@@ -268,7 +279,7 @@ class PushButtonsEnv():
 
         #a_big = scipy.misc.imresize(a, [32,32,3], interp='nearest')
         #a_big = Image.fromarray(a).resize(size = [32, 32])
-        a_big = skimage.transform.resize(a, [32, 32, 3])
+        a_big = skimage.transform.resize(a, [32, 32, 3], order = 0)*255.0
         return a, a_big
 
     def step(self,action):
@@ -577,7 +588,8 @@ class gameEnv():
             #    hero = item
         if self.partial == True:
             a = a[(hero.y):(hero.y+(padding*2)+hero.size),(hero.x):(hero.x+(padding*2)+hero.size),:]
-        a_big = scipy.misc.imresize(a,[32,32,3],interp='nearest')
+        #a_big = scipy.misc.imresize(a,[32,32,3],interp='nearest')
+        a_big = skimage.transform.resize(a, [32, 32, 3], order = 0)*255.0
         return a,a_big
 
     def step(self,action):

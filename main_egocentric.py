@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+#import os
+#os.environ["CUDA_VISIBLE_DEVICES"]=""
+
 import threading
 import multiprocessing
 import numpy as np
@@ -265,7 +269,7 @@ def config():
     train = True
     model_path = './model_meta_ego'
     name = "main_ego"
-    env = "steplights"
+    env = "pushbuttons_cardinal"
     env_dim = 5
     dev = True
     hyperparam = False
