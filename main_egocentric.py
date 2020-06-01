@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-#import os
-#os.environ["CUDA_VISIBLE_DEVICES"]=""
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]=""
 
 import threading
 import multiprocessing
@@ -103,7 +103,7 @@ class AC_Network():
 
 
 class Worker():
-    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate):
+    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate, test_rate):
         self.name = "worker_" + str(name)
         self.number = name        
         self.model_path = model_path
@@ -111,6 +111,8 @@ class Worker():
         self.global_episodes = global_episodes
         self.increment = self.global_episodes.assign_add(1)
         self.episode_rewards = []
+        self.test_rewards = []
+        self.test_rate = test_rate
         self.episode_lengths = []
         self.episode_mean_values = []
         self.summary_writer = tf.summary.FileWriter("train_"+str(self.number))
@@ -173,6 +175,7 @@ class Worker():
                 episode_buffer = []
                 episode_values = []
                 episode_frames = []
+                episode_test_frames = []
                 episode_reward = 0
                 episode_step_count = 0
                 d = False
@@ -180,7 +183,12 @@ class Worker():
                 a = 0
                 t = 0
 
-                s,s_big = self.env.reset()
+                testing = episode_count % self.test_rate == 0 and episode_count > 0
+
+                if testing:
+                    s,s_big = self.env.reset(test = True)
+                else:
+                    s,s_big = self.env.reset(test = False)
                 rnn_state = self.local_AC.state_init
                 
                 while d == False:
@@ -198,10 +206,14 @@ class Worker():
                     
                     rnn_state = rnn_state_new
                     s1,s1_big,r,d = self.env.step(a)                        
-                    episode_buffer.append([s,a,r,t,d,v[0,0]])
                     episode_values.append(v[0,0])
                     episode_reward += r
-                    episode_frames.append(set_image_ego(s1_big,episode_reward,t))
+                    if not testing:
+                        episode_buffer.append([s,a,r,t,d,v[0,0]])
+                        episode_frames.append(set_image_ego(s1_big,episode_reward,t))
+                    else:
+                        episode_test_frames.append(set_image_ego(s1_big,episode_reward,t))
+
                     total_steps += 1
                     t += 1
                     episode_step_count += 1
@@ -210,13 +222,20 @@ class Worker():
                     if episode_step_count > 100:
                         d = True
                                             
-                self.episode_rewards.append(episode_reward)
-                self.episode_lengths.append(episode_step_count)
-                self.episode_mean_values.append(np.mean(episode_values))
-                
-                # Update the network using the experience buffer at the end of the episode.
-                if len(episode_buffer) != 0 and train == True:
-                    v_l,p_l,e_l,g_n,v_n = self.train(episode_buffer,sess,gamma,0.0)
+                if not testing:
+                    self.episode_rewards.append(episode_reward)
+                    self.episode_lengths.append(episode_step_count)
+                    self.episode_mean_values.append(np.mean(episode_values))
+                    # Update the network using the experience buffer at the end of the episode.
+                    if len(episode_buffer) != 0 and train == True:
+                        v_l,p_l,e_l,g_n,v_n = self.train(episode_buffer,sess,gamma,0.0)
+                else:
+                    self.test_rewards.append(episode_reward)
+                    if self.name == 'worker_0' and episode_count % 5000 == 0:
+                        time_per_step = 0.25
+                        test_images = np.array(episode_test_frames)
+                        make_gif(test_images,'./frames/image'+str(episode_count)+'_test_env.gif',
+                            duration=len(test_images)*time_per_step,true_image=True)
                     
                 # Periodically save gifs of episodes, model parameters, and summary statistics.
                 if episode_count % self.save_rate == 0 and episode_count != 0:
@@ -231,10 +250,12 @@ class Worker():
                             duration=len(self.images)*time_per_step,true_image=True)
                         
                     mean_reward = np.mean(self.episode_rewards[-50:])
+                    mean_test_reward = np.mean(self.test_rewards[-50:])
                     mean_length = np.mean(self.episode_lengths[-50:])
                     mean_value = np.mean(self.episode_mean_values[-50:])
 
                     ex.log_scalar("training.mean_reward", mean_reward)
+                    ex.log_scalar("training.mean_test_reward", mean_test_reward)
 
                     summary = tf.Summary()
                     summary.value.add(tag='Perf/Reward', simple_value=float(mean_reward))
@@ -249,6 +270,7 @@ class Worker():
                     self.summary_writer.add_summary(summary, episode_count)
                     
                     print(f"Average reward: {float(mean_reward)}")
+                    print(f"Average test reward: {float(mean_test_reward)}")
                     print(f"Average length: {float(mean_length)}")
                     print(f"Average value: {float(mean_value)}")
 
@@ -267,16 +289,19 @@ def config():
     a_size = 5 
     load_model = False
     train = True
-    model_path = './model_meta_ego'
+    model_path = './model_meta_ego_gen'
     name = "main_ego"
-    env = "pushbuttons_cardinal"
+    env = "pushbuttons"
     env_dim = 5
+    env_dim_max = 7
     dev = True
     hyperparam = False
+    randomize_size = True
     save_rate = 1e4
+    test_rate = 5e3 #By default we don't test...
 
 @ex.automain 
-def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate):
+def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate, env_dim_max, test_rate, randomize_size):
 
     model_path = './models/' + name + '_' + env
     
@@ -309,12 +334,13 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
 
         global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
         trainer = tf.train.AdamOptimizer(learning_rate=1e-3)
-        master_network = AC_Network(a_size,env_dim+2,'global',None) # Generate global network
+        master_network = AC_Network(a_size,env_dim_max+2+1,'global',None) # Generate global network
         num_workers = min(MAX_WORKERS, multiprocessing.cpu_count()) # Set workers ot number of available CPU threads
         workers = []
         # Create worker classes
         for i in range(num_workers):
-            workers.append(Worker(Env(size = env_dim),i,a_size,env_dim+2,trainer,model_path,global_episodes,save_rate))
+            workers.append(Worker(Env(size = env_dim, randomize_size = randomize_size),\
+                i,a_size,env_dim_max+1+2,trainer,model_path,global_episodes,save_rate, test_rate))
         saver = tf.train.Saver(max_to_keep=5)
 
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, 

@@ -186,7 +186,7 @@ class PushButtonsEnv():
 
     Reward is given when, after receiving a go cue, it reaches the exit square
     """
-    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30, randomize_size = False, max_size = 8):
+    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30, randomize_size = False, max_size = 7):
         self.alpha = 0.5
         self.max_steps = max_steps
         self.obs_steps = obs_steps
@@ -195,35 +195,45 @@ class PushButtonsEnv():
         self.open_count = 5 #Number of time steps the door is open after button pushed
         self.randomize_size = randomize_size
         self.size = size
-        self.max_size = max_size
+        if self.randomize_size: self.max_size = max_size
+        else: self.max_size = size
         self._make_geometry()
         self.reset()
 
-    def _make_geometry(self):
+    def _make_geometry(self, test = False):
 
-        if self.randomize_size: size = np.random.randint(self.size, self.max_size+1)
+        if test: size = self.max_size+1
+        elif self.randomize_size: size = np.random.randint(self.size, self.max_size+1)
         else: size = self.size
         self.sizeX = size
         self.sizeY = size
         self.bg = np.zeros([size,size])
 
-        self.b1_pos = (0,2)
-        self.b2_pos = (2,0)
-        self.b3_pos = (4,2)
-        self.door_pos = (2,4)
+        #self.b1_pos = (0,2)
+        #self.b2_pos = (2,0)
+        #self.b3_pos = (4,2)
+        #self.door_pos = (2,4)
+        self.b1_pos = (0,2-self.size+size)
+        self.b2_pos = (2-self.size+size,0)
+        self.b3_pos = (size-1,2-self.size+size)
+        self.door_pos = (2-self.size+size,size-1)
 
         self.render_button_pos = np.zeros((self.n_buttons, 2), dtype = int)
 
-        self.render_button_pos[0,:] = [0,3]
-        self.render_button_pos[1,:] = [3,0]
-        self.render_button_pos[2,:] = [6,3]
-        self.render_door_pos = (3,6)
+        #self.render_button_pos[0,:] = [0,3]
+        #self.render_button_pos[1,:] = [3,0]
+        #self.render_button_pos[2,:] = [6,3]
+        #self.render_door_pos = (3,6)
+        self.render_button_pos[0,:] = [0,self.b1_pos[1]+1]
+        self.render_button_pos[1,:] = [self.b2_pos[0]+1,0]
+        self.render_button_pos[2,:] = [self.b3_pos[0]+2,self.b3_pos[1]+1]
+        self.render_door_pos = (self.door_pos[0]+1,self.door_pos[1]+2)
 
         self.button_positions = [self.b1_pos, self.b2_pos, self.b3_pos]
 
-    def reset(self):            
+    def reset(self, test = False):            
 
-        self._make_geometry()
+        self._make_geometry(test)
         #Choose the topology randomly with each reset
         self.exit_button = self.chooseNewTarget()
         self.timestep = 0
@@ -250,7 +260,9 @@ class PushButtonsEnv():
             return 0
 
     def renderEnv(self, brightness = 0.2):
-        s = np.zeros([self.sizeY+2,self.sizeX+2])
+
+        s = np.zeros([self.max_size+1+2,self.max_size+1+2])
+        #s = np.zeros([self.sizeY+2,self.sizeX+2])
         #Buttons
         for idx in range(self.n_buttons):
             s[(int(self.render_button_pos[idx,0]),int(self.render_button_pos[idx,1]))] = 0.5
