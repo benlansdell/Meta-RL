@@ -20,11 +20,6 @@ class gameOb():
         self.reward = reward
         self.name = name
 
-#Still to implement:
-# PushButtonsEnv (Room and ball)
-# PushBoxesEnv (Sokoban)
-# AnnasExpts (Something?)
-
 class StepOnLightsEnv():
     """Agent can move around, and step on one of the lights to block it ('intervening' on it). 
 
