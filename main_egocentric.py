@@ -314,6 +314,8 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
         Env = PushButtonsEnv
     elif env == "pushbuttons_cardinal":
         Env = PushButtonsCardinalEnv
+    elif env == "pushmanybuttons":
+        Env = PushManyButtonsEnv
     elif env == "pushbox":
         raise NotImplementedError
     elif env == "anna":

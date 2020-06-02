@@ -186,7 +186,7 @@ class PushButtonsEnv():
 
     Reward is given when, after receiving a go cue, it reaches the exit square
     """
-    def __init__(self, size = 5, delay = 1, obs_steps = 20, max_steps = 30, randomize_size = False, max_size = 7):
+    def __init__(self, size = 5, delay = 1, obs_steps = 30, max_steps = 40, randomize_size = False, max_size = 7):
         self.alpha = 0.5
         self.max_steps = max_steps
         self.obs_steps = obs_steps
@@ -369,6 +369,88 @@ class PushButtonsEnv():
         #Render states to agent to see....
         rendered_state, rendered_state_big = self.renderEnv()
         return rendered_state, rendered_state_big, reward, done
+
+class PushManyButtonsEnv(PushButtonsEnv):
+    """Agent can observe a ball bouncing around. The ball has some slight randomness in the angle it bounces off the walls.
+    The ball can interact with buttons that open a door. When the go cue is given, the agent must figure out which button is
+    the one that opens the door and quickly move to it before get the reward in time. 
+
+    This is quite challenging to just randomly solve...
+
+    Reward is given when, after receiving a go cue, it reaches the exit square
+    """
+
+    def __init__(self, size = 5, delay = 1, obs_steps = 25, max_steps = 40, randomize_size = False, max_size = 7):
+        self.alpha = 0.5
+        self.max_steps = max_steps
+        self.obs_steps = obs_steps
+        self.actions = 4
+        self.n_buttons = 6
+        self.open_count = 5 #Number of time steps the door is open after button pushed
+        self.randomize_size = randomize_size
+        self.size = size
+        if self.randomize_size: self.max_size = max_size
+        else: self.max_size = size
+        self._make_geometry()
+        self.reset()
+
+    def _make_geometry(self):
+
+        self.sizeX = self.size
+        self.sizeY = self.size
+        self.bg = np.zeros([self.size,self.size])
+
+        self.b1_pos = (0,1)
+        self.b2_pos = (1,0)
+        self.b3_pos = (4,1)
+        self.b4_pos = (0,3)
+        self.b5_pos = (3,0)
+        self.b6_pos = (4,3)
+
+        self.door_pos = (2,4)
+
+        self.render_button_pos = np.zeros((self.n_buttons, 2), dtype = int)
+
+        self.render_button_pos[0,:] = [0,2]
+        self.render_button_pos[1,:] = [2,0]
+        self.render_button_pos[2,:] = [6,2]
+        self.render_button_pos[3,:] = [0,4]
+        self.render_button_pos[4,:] = [4,0]
+        self.render_button_pos[5,:] = [6,4]
+
+        self.render_door_pos = (3,6)
+        
+        self.button_positions = [self.b1_pos, self.b2_pos, self.b3_pos,\
+                                self.b4_pos, self.b5_pos, self.b6_pos]
+
+        self.test_button = 2
+
+    def reset(self, test = False):            
+
+        #Choose the topology randomly with each reset
+        self.exit_button = self.chooseNewTarget(test = test)        
+        self.timestep = 0
+        #Choose the ball's position and target randomly
+        self.door_open = 0
+        self.button_on = [0]*self.n_buttons
+        self.ball_pos = np.random.randint(self.sizeX, size = 2)
+        self.ball_target = self.chooseNewTarget()
+        self.agent_pos = np.random.randint(self.sizeX, size = 2)
+        self.state = np.zeros(self.n_buttons+1)
+        rendered_state, rendered_state_big = self.renderEnv()
+        self.xhistory = np.zeros((self.max_steps, self.n_buttons+1))
+        return rendered_state, rendered_state_big
+
+    def chooseNewTarget(self, test = None):
+        if test is None:
+            return np.random.randint(self.n_buttons)
+        elif test is True:
+            return self.test_button
+        else:
+            b = np.random.randint(self.n_buttons)
+            while b == self.test_button:
+                b = np.random.randint(self.n_buttons)
+            return b
 
 class PushButtonsCardinalEnv(PushButtonsEnv):
     """Agent can observe a ball bouncing around. The ball has some slight randomness in the angle it bounces off the walls.
