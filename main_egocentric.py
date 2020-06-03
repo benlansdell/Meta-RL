@@ -120,6 +120,7 @@ class Worker():
         self.local_AC = AC_Network(a_size,s_size,self.name,trainer)
         self.update_local_ops = update_target_graph('global',self.name)        
         self.env = env
+        self.env_name = type(env).__name__
         
     def train(self,rollout,sess,gamma,bootstrap_value):
         rollout = np.array(rollout)
