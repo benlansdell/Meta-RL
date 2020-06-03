@@ -126,8 +126,9 @@ class AC_CNN_Network(AC_Network):
         return net
 
 class Worker():
-    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate, test_rate, Network):
+    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate, test_rate, Network, model_name):
         self.name = "worker_" + str(name)
+        self.model_name = model_name
         self.number = name        
         self.model_path = model_path
         self.trainer = trainer
@@ -258,8 +259,7 @@ class Worker():
                     if self.name == 'worker_0' and episode_count % 5000 == 0:
                         time_per_step = 0.25
                         test_images = np.array(episode_test_frames)
-                        frame_name = './frames/image_'+ self.env_name + '_' + self.number + \
-                                     '_' + str(episode_count)+'_test_env.gif'
+                        frame_name = './frames/image_'+ self.env_name + '_' + self.model_name + '_' + str(episode_count)+'_test_env.gif'
                         make_gif(test_images, frame_name,
                             duration=len(test_images)*time_per_step,true_image=True)
                     
@@ -272,7 +272,7 @@ class Worker():
                     if self.name == 'worker_0' and episode_count % 1000 == 0:
                         time_per_step = 0.25
                         self.images = np.array(episode_frames)
-                        frame_name = './frames/image_'+ self.env + '_' + self.number + \
+                        frame_name = './frames/image_'+ self.env + '_' + self.model_name + \
                                         '_' + str(episode_count)+'_env.gif'
                         make_gif(self.images,frame_name,
                             duration=len(self.images)*time_per_step,true_image=True)
@@ -379,7 +379,7 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
         for i in range(num_workers):
             workers.append(Worker(Env(size = env_dim, randomize_size = randomize_size),
                 i,a_size,env_dim_max+1+2,trainer,model_path,global_episodes,save_rate, test_rate,
-                Network))
+                Network, name))
         saver = tf.train.Saver(max_to_keep=5)
 
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, 
