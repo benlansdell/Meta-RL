@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]=""
+#os.environ["CUDA_VISIBLE_DEVICES"]=""
 
 import threading
 import multiprocessing
@@ -17,8 +17,6 @@ from PIL import ImageFont
 
 import scipy.signal
 from lib.helper import *
-
-import os 
 
 from random import choice
 from time import sleep
@@ -234,7 +232,9 @@ class Worker():
                     if self.name == 'worker_0' and episode_count % 5000 == 0:
                         time_per_step = 0.25
                         test_images = np.array(episode_test_frames)
-                        make_gif(test_images,'./frames/image'+str(episode_count)+'_test_env.gif',
+                        frame_name = './frames/image_'+ self.env + '_' + self.number + \
+                                     '_' + str(episode_count)+'_test_env.gif'
+                        make_gif(test_images, frame_name,
                             duration=len(test_images)*time_per_step,true_image=True)
                     
                 # Periodically save gifs of episodes, model parameters, and summary statistics.
@@ -246,7 +246,9 @@ class Worker():
                     if self.name == 'worker_0' and episode_count % 1000 == 0:
                         time_per_step = 0.25
                         self.images = np.array(episode_frames)
-                        make_gif(self.images,'./frames/image'+str(episode_count)+'.gif',
+                        frame_name = './frames/image_'+ self.env + '_' + self.number + \
+                                        '_' + str(episode_count)+'_env.gif'
+                        make_gif(self.images,frame_name,
                             duration=len(self.images)*time_per_step,true_image=True)
                         
                     mean_reward = np.mean(self.episode_rewards[-50:])
@@ -296,9 +298,9 @@ def config():
     env_dim_max = 7
     dev = True
     hyperparam = False
-    randomize_size = True
+    randomize_size = False
     save_rate = 1e4
-    test_rate = 5e3 #By default we don't test...
+    test_rate = 5e3
 
 @ex.automain 
 def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate, env_dim_max, test_rate, randomize_size):
