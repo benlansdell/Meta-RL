@@ -233,7 +233,7 @@ class Worker():
                     if self.name == 'worker_0' and episode_count % 5000 == 0:
                         time_per_step = 0.25
                         test_images = np.array(episode_test_frames)
-                        frame_name = './frames/image_'+ self.env + '_' + self.number + \
+                        frame_name = './frames/image_'+ self.env_name + '_' + self.number + \
                                      '_' + str(episode_count)+'_test_env.gif'
                         make_gif(test_images, frame_name,
                             duration=len(test_images)*time_per_step,true_image=True)
