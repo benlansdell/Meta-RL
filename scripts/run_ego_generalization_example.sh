@@ -11,3 +11,4 @@ for VARIABLE in {1..2}
 do
 ./main_egocentric.py with epochs=100000 name="main_ego_gen_buttons" env="pushmanybuttons" dev="False" env_dim_max=5 a_size=4
 done
+

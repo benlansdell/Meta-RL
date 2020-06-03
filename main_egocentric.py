@@ -31,13 +31,23 @@ ex.observers.append(MongoObserver())
 NUM_PARALLEL_EXEC_UNITS = 4
 MAX_WORKERS = 4
 
-###
 class AC_Network():
+
+    def identity(self, inp):
+        return inp
+
     def __init__(self,a_size,s_size,scope,trainer):
+
+        self.vision_model = self.identity
+        self._make_net(a_size, s_size, scope, trainer)
+
+    def _make_net(self, a_size, s_size, scope, trainer):
+
         with tf.variable_scope(scope):
             #Input and visual encoding layers
             self.state = tf.placeholder(shape=[None,s_size,s_size,3],dtype=tf.float32)
-            self.conv = slim.fully_connected(slim.flatten(self.state),64,activation_fn=tf.nn.elu)
+            net = self.vision_model(self.state)
+            self.conv = slim.fully_connected(slim.flatten(net),64,activation_fn=tf.nn.elu)
             self.prev_rewards = tf.placeholder(shape=[None,1],dtype=tf.float32)
             self.prev_actions = tf.placeholder(shape=[None],dtype=tf.int32)
             self.timestep = tf.placeholder(shape=[None,1],dtype=tf.float32)
@@ -99,9 +109,24 @@ class AC_Network():
                 global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'global')
                 self.apply_grads = trainer.apply_gradients(zip(grads,global_vars))
 
+###
+class AC_CNN_Network(AC_Network):
+
+    def __init__(self,a_size,s_size,scope,trainer):
+
+        self.vision_model = self.cnn
+        self._make_net(a_size, s_size, scope, trainer)
+
+    def cnn(self, inp):
+        net = inp
+        #Put a CNN here...
+        net = slim.conv2d(net, 32, [3, 3], scope='conv1_1')
+        net = slim.conv2d(net, 64, [3, 3], scope='conv2_1')
+        net = slim.max_pool2d(net, [2, 2], scope='pool2')
+        return net
 
 class Worker():
-    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate, test_rate):
+    def __init__(self,env,name,a_size,s_size,trainer,model_path,global_episodes,save_rate, test_rate, Network):
         self.name = "worker_" + str(name)
         self.number = name        
         self.model_path = model_path
@@ -117,7 +142,7 @@ class Worker():
         self.save_rate = save_rate
 
         #Create the local copy of the network and the tensorflow op to copy global paramters to local network
-        self.local_AC = AC_Network(a_size,s_size,self.name,trainer)
+        self.local_AC = Network(a_size,s_size,self.name,trainer)
         self.update_local_ops = update_target_graph('global',self.name)        
         self.env = env
         self.env_name = type(env).__name__
@@ -302,9 +327,10 @@ def config():
     randomize_size = False
     save_rate = 1e4
     test_rate = 5e3
+    arch='identity'
 
 @ex.automain 
-def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate, env_dim_max, test_rate, randomize_size):
+def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, save_rate, env_dim_max, test_rate, randomize_size, arch):
 
     model_path = './models/' + name + '_' + env
     
@@ -326,6 +352,13 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
     else:
         raise ValueError("Not valid environment name")
            
+    if arch == 'identity':
+        Network = AC_Network
+    elif arch == 'cnn':
+        Network = AC_CNN_Network
+    else:
+        raise ValueError("Not valid network architecture name")
+
     tf.reset_default_graph()
 
     if not os.path.exists(model_path):
@@ -339,13 +372,14 @@ def main(_run, epochs, gamma, a_size, env_dim, load_model, train, name, env, sav
 
         global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
         trainer = tf.train.AdamOptimizer(learning_rate=1e-3)
-        master_network = AC_Network(a_size,env_dim_max+2+1,'global',None) # Generate global network
+        master_network = Network(a_size,env_dim_max+2+1,'global',None) # Generate global network
         num_workers = min(MAX_WORKERS, multiprocessing.cpu_count()) # Set workers ot number of available CPU threads
         workers = []
         # Create worker classes
         for i in range(num_workers):
-            workers.append(Worker(Env(size = env_dim, randomize_size = randomize_size),\
-                i,a_size,env_dim_max+1+2,trainer,model_path,global_episodes,save_rate, test_rate))
+            workers.append(Worker(Env(size = env_dim, randomize_size = randomize_size),
+                i,a_size,env_dim_max+1+2,trainer,model_path,global_episodes,save_rate, test_rate,
+                Network))
         saver = tf.train.Saver(max_to_keep=5)
 
     config = tf.ConfigProto(intra_op_parallelism_threads=NUM_PARALLEL_EXEC_UNITS, 
