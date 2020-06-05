@@ -269,7 +269,7 @@ class Worker():
                         saver.save(sess,self.model_path+'/model-'+str(episode_count)+'.cptk')
                         print("Saved Model")
 
-                    if self.name == 'worker_0' and episode_count % 1000 == 0:
+                    if self.name == 'worker_0' and episode_count % 1000 == 0 and not testing:
                         time_per_step = 0.25
                         self.images = np.array(episode_frames)
                         frame_name = './frames/image_'+ self.env_name + '_' + self.model_name + \
